@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.angular/
+coverage/
+*.log
+.env
+.env.local
+Backend/uploads/*
+!Backend/uploads/.gitkeep
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
