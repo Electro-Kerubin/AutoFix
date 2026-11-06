@@ -1,3 +1,2 @@
 import { Routes } from '@angular/router';
-
-export const routes: Routes = [];
+export const routes:Routes=[...['','proyectos','planificacion','gantt','recursos','hitos','kpi','cambios','tablero-cambios','riesgos','contexto','trazabilidad'].map(path=>({path,loadComponent:()=>import('./project-workspace').then(m=>m.ProjectWorkspace)})),{path:'**',redirectTo:''}];

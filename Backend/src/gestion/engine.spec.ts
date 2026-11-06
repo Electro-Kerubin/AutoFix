@@ -1,0 +1,21 @@
+import { describe,it,expect } from 'vitest';
+import { initialProject } from './seed';
+import { formula,schedule,metrics,resourceCost,indicatorResult } from './engine';
+import { validate } from './validation';
+function project(){const p=initialProject();p.start='2026-10-01';p.end='2027-05-30';p.activities=p.activities.slice(0,2);p.activities[0]={...p.activities[0],start:'2026-10-01',end:'2026-10-02',duration:2,dependencies:[]};p.activities[1]={...p.activities[1],start:'2026-10-03',end:'2026-10-04',duration:2,dependencies:[{activityId:p.activities[0].id,type:'FS',lag:0}]};p.milestones=[];p.indicators=[];return p;}
+describe('Gestión de proyectos',()=>{
+ it('valida el contexto AutoFix sin EDT y sin inventar costos reales',()=>{const p=initialProject();expect(()=>validate(p)).not.toThrow();expect(p.activities).toHaveLength(20);expect(p.milestones).toHaveLength(5);expect(p.sources.some(s=>s.includes('EDT_Diccionario'))).toBe(false);expect(metrics(p).actual).toBeNull();expect(metrics(p).planned).toBe(190000000);});
+ it('propaga una nueva duración a sus sucesoras FS',()=>{const p=project();p.activities[0].duration=5;schedule(p);expect(p.activities[0].end).toBe('2026-10-05');expect(p.activities[1].start).toBe('2026-10-06');});
+ it.each([['SS','2026-10-02'],['FF','2026-10-02'],['SF','2026-10-01']])('recalcula relación %s con desfase', (type,start)=>{const p=project();p.activities[1].dependencies[0]={activityId:p.activities[0].id,type:type as any,lag:1};schedule(p);expect(p.activities[1].start).toBe(start);});
+ it('admite desfases negativos',()=>{const p=project();p.activities[1].dependencies[0].lag=-1;schedule(p);expect(p.activities[1].start).toBe('2026-10-02');});
+ it('rechaza dependencias circulares',()=>{const p=project();p.activities[0].dependencies=[{activityId:p.activities[1].id,type:'FS',lag:0}];expect(()=>schedule(p)).toThrow(/circular/);});
+ it('respeta días laborables y feriados',()=>{const p=project();p.calendar={workdays:[1,2,3,4,5],holidays:['2026-10-02']};schedule(p);expect(p.activities[0].end).toBe('2026-10-05');expect(p.activities[1].start).toBe('2026-10-06');});
+ it('respeta una fecha de inicio fijada al arrastrar',()=>{const p=project();p.activities[1].constraintStart='2026-10-12';schedule(p);expect(p.activities[1].start).toBe('2026-10-12');});
+ it('calcula fórmulas con precedencia, paréntesis y variables',()=>{expect(formula('(completado / total) * 100',{completado:3,total:4})).toBe(75);expect(formula('2+3*4',{})).toBe(14);});
+ it('muestra ausencia de datos ante división por cero',()=>{expect(formula('a/b',{a:0,b:0})).toBeNull();});
+ it('rechaza código ejecutable y variables no declaradas',()=>{expect(()=>formula('process.exit()',{})).toThrow();expect(()=>formula('dato+1',{})).toThrow(/Variable/);});
+ it('calcula costo profesional y asignaciones sin duplicar presupuesto',()=>{const p=project();p.resources=[{id:'R',name:'Profesional',type:'PROFESSIONAL',basis:'HOURLY',quantity:1,unit:'hora',unitCost:10000,hoursWeek:40,weeks:2,capacityWeek:40,actualCost:600000,specialty:'Dev',sourceAssignment:''}];p.assignments=[{id:'A',resourceId:'R',activityId:p.activities[0].id,percentage:50,hoursWeek:20}];expect(resourceCost(p.resources[0])).toBe(800000);expect(metrics(p).allocations[0].planned).toBe(400000);expect(metrics(p).planned).toBe(800000);expect(metrics(p).actual).toBe(600000);});
+ it('alerta sobreasignación semanal de profesionales',()=>{const p=project();p.resources=[{...p.resources[0],id:'R',type:'PROFESSIONAL',capacityWeek:40,quantity:1}];p.assignments=[{id:'A',resourceId:'R',activityId:p.activities[0].id,percentage:100,hoursWeek:50}];expect(metrics(p).overallocations.length).toBeGreaterThan(0);});
+ it('rechaza cierre de proyecto con trabajo pendiente',()=>{const p=initialProject();p.state='TERMINADO';expect(()=>validate(p)).toThrow(/completa/);});
+ it('evalúa semáforos configurables',()=>{const p=initialProject();const k={...p.indicators[0],formula:'medida',manual:{medida:70},target:90,warning:60};expect(indicatorResult(p,k).status).toBe('AMBAR');});
+});

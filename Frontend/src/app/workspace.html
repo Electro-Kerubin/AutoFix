@@ -1,0 +1,1279 @@
+<div class="workspace">
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow">
+        {{ view === 'proyecto' ? 'DIRECCIÓN DEL PROYECTO' : 'RED PILOTO · SUGO AUTOFIX' }}
+      </div>
+      <h1>{{ titles[view] }}</h1>
+      <p>{{ descriptions[view] }}</p>
+    </div>
+    <div class="heading-actions">
+      <button (click)="load()" [disabled]="loading()">↻ Actualizar</button>
+      @if (canWrite && ['ordenes', 'agenda', 'clientes', 'vehiculos'].includes(view)) {
+        <button
+          class="primary"
+          (click)="
+            open(
+              view === 'ordenes'
+                ? 'ot'
+                : view === 'agenda'
+                  ? 'reserva'
+                  : view === 'clientes'
+                    ? 'cliente'
+                    : 'vehiculo'
+            )
+          "
+        >
+          ＋
+          {{
+            view === 'ordenes'
+              ? 'Nueva orden'
+              : view === 'agenda'
+                ? 'Nueva reserva'
+                : view === 'clientes'
+                  ? 'Nuevo cliente'
+                  : 'Nuevo vehículo'
+          }}
+        </button>
+      }
+      @if (view === 'proyecto' && context()) {
+        <button class="primary" (click)="exportPlan()">↓ Exportar planificación</button>
+      }
+    </div>
+  </div>
+  @if (error()) {
+    <div class="alert error" role="alert">{{ error() }}</div>
+  }
+  @if (notice()) {
+    <div class="alert success" role="status">{{ notice() }}</div>
+  }
+  @if (!['proyecto', 'clientes', 'vehiculos', 'garantias', 'integraciones'].includes(view)) {
+    <section class="filterbar">
+      <span class="filter-label">Vista de la operación</span
+      ><select
+        aria-label="Sucursal"
+        [(ngModel)]="sucursal"
+        (ngModelChange)="search()"
+        [disabled]="!!api.usuario()?.sucursalId"
+      >
+        <option value="">Todas las sucursales</option>
+        @for (s of sucursales(); track s.id) {
+          <option [value]="s.id">{{ s['nombre'] }}</option>
+        }
+      </select>
+      @if (['agenda', 'indicadores'].includes(view)) {
+        <label class="inline"
+          >Desde<input type="date" [(ngModel)]="desde" (change)="search()" /></label
+        ><label class="inline"
+          >Hasta<input type="date" [(ngModel)]="hasta" (change)="search()"
+        /></label>
+      }
+      <span class="live"><i></i> Datos de la operación</span>
+    </section>
+  }
+  @if (loading()) {
+    <div class="loading" role="status">Cargando información…</div>
+  }
+  @if (view === '' || view === 'indicadores') {
+    @if (kpi(); as k) {
+      <section class="stats">
+        <article>
+          <span>Órdenes en taller <b>↗</b></span
+          ><strong>{{ k.ordenesTrabajo.abiertas }}</strong
+          ><small>En proceso en la red seleccionada</small>
+        </article>
+        <article>
+          <span>Reservas del período <b>▦</b></span
+          ><strong>{{ k.reservas.total }}</strong
+          ><small
+            >No-show:
+            {{
+              k.reservas.tasaNoShow === null ? 'Sin mediciones' : k.reservas.tasaNoShow + '%'
+            }}</small
+          >
+        </article>
+        <article>
+          <span>Presupuestos aprobados <b>✓</b></span
+          ><strong>{{ k.presupuestos.aprobados }}</strong
+          ><small>{{
+            k.presupuestos.tasaAprobacion === null
+              ? 'Sin decisiones'
+              : k.presupuestos.tasaAprobacion + '% de aprobación'
+          }}</small>
+        </article>
+        <article>
+          <span>Facturación del período <b>＄</b></span
+          ><strong class="money-stat">{{ money(k.ordenesTrabajo.montoFacturado) }}</strong
+          ><small>{{ k.ordenesTrabajo.entregadas }} órdenes entregadas</small>
+        </article>
+      </section>
+      <section class="two-grid">
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Flujo del taller</h2>
+              <p>Distribución de las órdenes abiertas</p>
+            </div>
+            <span class="tag">En vivo</span>
+          </div>
+          <div class="state-chart">
+            @for (state of k.ordenesTrabajo.abiertasPorEstado | keyvalue; track state.key) {
+              <div>
+                <span>{{ label(state.key) }}</span>
+                <div class="track">
+                  <i [style.width.%]="(+state.value / (k.ordenesTrabajo.abiertas || 1)) * 100"></i>
+                </div>
+                <strong>{{ state.value }}</strong>
+              </div>
+            } @empty {
+              <p class="empty">No hay órdenes abiertas en esta sucursal.</p>
+            }
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Puntos de atención</h2>
+              <p>Señales para coordinar al equipo</p>
+            </div>
+          </div>
+          <div class="insight">
+            <span class="insight-icon amber">▧</span>
+            <div>
+              <strong>{{ k.repuestos.itemsBajoMinimo }} ítems bajo mínimo</strong
+              ><small>Revisa la disponibilidad para evitar compras urgentes.</small>
+            </div>
+            <a routerLink="/repuestos">Ver →</a>
+          </div>
+          <div class="insight">
+            <span class="insight-icon blue">◷</span>
+            <div>
+              <strong
+                >{{
+                  k.ordenesTrabajo.horasPromedioEnTaller === null
+                    ? 'Sin entregas'
+                    : k.ordenesTrabajo.horasPromedioEnTaller + ' h'
+                }}
+                en taller</strong
+              ><small>Tiempo promedio de las órdenes entregadas.</small>
+            </div>
+          </div>
+          <div class="insight">
+            <span class="insight-icon green">✓</span>
+            <div>
+              <strong>Meta de no-show: menos de 4%</strong
+              ><small>Línea base del Charter: 12%.</small>
+            </div>
+          </div>
+        </article>
+      </section>
+      @if (view === 'indicadores') {
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Metas del piloto</h2>
+              <p>Resultados medidos y criterios definidos en el Charter</p>
+            </div>
+            <a routerLink="/proyecto">Ver contexto →</a>
+          </div>
+          <div class="criteria">
+            <div>
+              <strong>Ausentismo menor al 4%</strong>
+              <p>
+                Resultado actual:
+                {{
+                  k.reservas.tasaNoShow === null
+                    ? 'sin datos de asistencia'
+                    : k.reservas.tasaNoShow + '%'
+                }}
+              </p>
+            </div>
+            <div>
+              <strong>Compras urgentes menores al 5%</strong>
+              <p>Pendiente de medición: la API aún no registra compras urgentes.</p>
+            </div>
+            <div>
+              <strong>Cero reclamos por diferencias de cobro</strong>
+              <p>Pendiente de medición: requiere registro de reclamos.</p>
+            </div>
+            <div>
+              <strong>Reducir las llamadas más de 70%</strong>
+              <p>Pendiente de medición: requiere registro telefónico.</p>
+            </div>
+          </div>
+        </article>
+      }
+    } @else if (!loading() && !error()) {
+      <div class="callout">
+        <strong>Tu espacio de operación</strong>
+        <p>
+          Consulta las órdenes de tu sucursal y continúa la atención de tus clientes. Los
+          indicadores consolidados están disponibles para jefatura y gerencia.
+        </p>
+        <a routerLink="/ordenes">Ir a órdenes →</a>
+      </div>
+    }
+    @if (view === '') {
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Trabajos en curso</h2>
+            <p>{{ total() }} órdenes abiertas en el alcance seleccionado</p>
+          </div>
+          <a routerLink="/ordenes">Ver todas las órdenes →</a>
+        </div>
+        <ng-container [ngTemplateOutlet]="orderTable" />
+      </article>
+    }
+  }
+  @if (
+    ['ordenes', 'clientes', 'vehiculos', 'repuestos', 'integraciones', 'garantias'].includes(view)
+  ) {
+    <form class="searchbar" (ngSubmit)="search()">
+      <input
+        name="query"
+        [(ngModel)]="query"
+        [placeholder]="
+          view === 'garantias'
+            ? 'Buscar patente o RUT…'
+            : view === 'ordenes'
+              ? 'Buscar por patente, cliente, RUT o número…'
+              : 'Buscar…'
+        "
+        aria-label="Buscar registros"
+      /><button class="primary" [disabled]="loading()">Buscar</button>
+      @if (view === 'ordenes') {
+        <select
+          aria-label="Estado de orden"
+          name="state"
+          [(ngModel)]="estado"
+          (ngModelChange)="search()"
+        >
+          <option value="">Todos los estados</option>
+          @for (state of transitions | keyvalue; track state.key) {
+            <option [value]="state.key">{{ label(state.key) }}</option>
+          }
+        </select>
+      }
+      @if (view === 'integraciones') {
+        <button type="button" (click)="sync()" [disabled]="saving()">Procesar pendientes</button>
+      }
+    </form>
+  }
+  @if (view === 'ordenes') {
+    <article class="panel"><ng-container [ngTemplateOutlet]="orderTable" /></article>
+  }
+  @if (view === 'clientes') {
+    <article class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>RUT</th>
+            <th>Contacto</th>
+            <th>Notificaciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <strong>{{ row['nombre'] }}</strong>
+              </td>
+              <td>{{ row['rut'] }}</td>
+              <td>
+                {{ row['email'] || 'Sin correo'
+                }}<small>{{ row['telefono'] || 'Sin teléfono' }}</small>
+              </td>
+              <td>
+                <span class="tag" [class.green]="row['aceptaNotificaciones']">{{
+                  row['aceptaNotificaciones'] ? 'Autorizadas' : 'No autorizadas'
+                }}</span>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="4" class="empty">No se encontraron clientes.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+  }
+  @if (view === 'vehiculos') {
+    <article class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Patente</th>
+            <th>Vehículo</th>
+            <th>Propietario</th>
+            <th>Kilometraje</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <span class="plate">{{ row['patente'] }}</span>
+              </td>
+              <td>
+                <strong>{{ row['marca'] }} {{ row['modelo'] }}</strong
+                ><small>{{ row['anio'] }}</small>
+              </td>
+              <td>{{ row['cliente']?.nombre || row['clienteId'] }}</td>
+              <td>{{ row['kilometraje'] | number }} km</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="4" class="empty">No se encontraron vehículos.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+  }
+  @if (view === 'repuestos') {
+    <article class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Repuesto</th>
+            <th>Categoría</th>
+            <th>Precio de venta</th>
+            <th>Stock</th>
+            <th>Ubicación</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <strong>{{ row['nombre'] }}</strong
+                ><small>{{ row['codigo'] }}</small>
+              </td>
+              <td>{{ row['categoria'] }}</td>
+              <td>{{ money(row['precioVenta']) }}</td>
+              <td>
+                <span class="tag" [class.amber]="stockTotal(row) === 0"
+                  >{{ stockTotal(row) }} unidades</span
+                >
+              </td>
+              <td>
+                @for (s of row['stock']; track s.id) {
+                  <small
+                    >{{ s.sucursal?.nombre }}: {{ s.cantidad }}
+                    <span [class.danger]="s.cantidad <= s.stockMinimo"
+                      >(mín. {{ s.stockMinimo }})</span
+                    ></small
+                  >
+                }
+              </td>
+              <td>
+                @if (api.can('BODEGA', 'JEFE_TALLER')) {
+                  <button (click)="stock(row)">Ajustar stock</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty">No hay repuestos para esta búsqueda.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+  }
+  @if (['ordenes', 'clientes', 'vehiculos', 'repuestos'].includes(view)) {
+    <div class="pagination">
+      <span>{{ total() }} registros · Página {{ page }}</span>
+      <div>
+        <button (click)="paginate(-1)" [disabled]="page === 1 || loading()">← Anterior</button
+        ><button (click)="paginate(1)" [disabled]="page * 12 >= total() || loading()">
+          Siguiente →
+        </button>
+      </div>
+    </div>
+  }
+  @if (view === 'agenda') {
+    <article class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha y hora</th>
+            <th>Cliente y vehículo</th>
+            <th>Sucursal</th>
+            <th>Motivo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <strong>{{ date(row['inicio']) }}</strong
+                ><small>{{ label(row['canal']) }}</small>
+              </td>
+              <td>
+                {{ row['cliente']?.nombre }}<small>{{ row['vehiculo']?.patente }}</small>
+              </td>
+              <td>{{ row['sucursal']?.nombre }}</td>
+              <td>{{ row['motivo'] }}</td>
+              <td>
+                <span class="tag">{{ label(row['estado']) }}</span>
+              </td>
+              <td>
+                @if (canWrite && row['estado'] === 'CONFIRMADA') {
+                  <div class="actions">
+                    <button (click)="reservationAction(row, 'asistio')" [disabled]="saving()">
+                      Asistió</button
+                    ><button (click)="reservationAction(row, 'no-show')" [disabled]="saving()">
+                      No asistió
+                    </button>
+                  </div>
+                }
+                @if (canWrite && ['CONFIRMADA', 'ASISTIO'].includes(row['estado'])) {
+                  <button class="link" (click)="receive(row)">Recepcionar vehículo →</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty">No hay reservas para el período seleccionado.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+  }
+  @if (view === 'integraciones') {
+    <article class="panel table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Sistema</th>
+            <th>Operación</th>
+            <th>Estado</th>
+            <th>Intentos</th>
+            <th>Último error</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <strong>{{ row['sistema'] }}</strong>
+              </td>
+              <td>{{ label(row['tipo']) }}</td>
+              <td>
+                <span class="tag">{{ label(row['estado']) }}</span>
+              </td>
+              <td>{{ row['intentos'] }}</td>
+              <td>{{ row['ultimoError'] || '—' }}</td>
+              <td>
+                @if (['ERROR', 'FALLIDO'].includes(row['estado'])) {
+                  <button (click)="sync(row.id)" [disabled]="saving()">Reintentar</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="6" class="empty">No hay envíos a sistemas externos.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </article>
+  }
+  @if (view === 'garantias') {
+    @if (history(); as h) {
+      <article class="panel">
+        <div class="panel-heading"><h2>Historial encontrado</h2></div>
+        @for (v of h.vehiculos; track v.id) {
+          <div class="history-vehicle">
+            <span class="plate">{{ v.patente }}</span>
+            <h3>{{ v.marca }} {{ v.modelo }}</h3>
+          </div>
+        }
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Vehículo</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (o of h.ordenes; track o.id) {
+                <tr>
+                  <td>{{ o.numero }}</td>
+                  <td>{{ o.vehiculo?.patente }}</td>
+                  <td>{{ label(o.estado) }}</td>
+                  <td>{{ date(o.fechaIngreso) }}</td>
+                  <td>{{ money(o.totalFinal) }}</td>
+                  <td><button (click)="inspect(o)">Ver detalle</button></td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="empty">Sin atenciones registradas.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="criteria">
+          @for (g of h.garantias; track g.id) {
+            <div>
+              <strong>{{ g.descripcion }}</strong>
+              <p>Garantía hasta {{ date(g.fechaVencimiento) }}</p>
+            </div>
+          } @empty {
+            <p class="empty">Sin garantías registradas para esta búsqueda.</p>
+          }
+        </div>
+      </article>
+    } @else {
+      <div class="empty panel">
+        Ingresa una patente o RUT para consultar su historial multisucursal.
+      </div>
+    }
+  }
+  @if (view === 'proyecto' && context(); as c) {
+    <div class="callout">
+      <span class="eyebrow">LÍNEA BASE DOCUMENTADA</span>
+      <h2>{{ c.nombre }}</h2>
+      <p>
+        Piloto en {{ c.sucursales.join(', ') }}. Agenda, OT, presupuestos, repuestos, garantías y
+        portal cliente.
+      </p>
+      <small>{{ c.nota }}</small>
+    </div>
+    <section class="stats">
+      <article>
+        <span>Presupuesto autorizado</span
+        ><strong class="money-stat">{{ money(c.presupuesto) }}</strong
+        ><small>No representa gasto ejecutado</small>
+      </article>
+      <article>
+        <span>Avance documentado</span><strong>{{ progress() }}%</strong
+        ><small>Promedio ponderado por duración</small>
+      </article>
+      <article>
+        <span>Actividades / Hitos</span
+        ><strong
+          >{{ c.actividades.length }} <em>/ {{ c.hitos.length }}</em></strong
+        ><small>Desde los documentos de Contexto</small>
+      </article>
+      <article>
+        <span>Fecha comprometida</span><strong class="date-stat">{{ date(c.fin) }}</strong
+        ><small>8 meses · Inicio {{ date(c.inicio) }}</small>
+      </article>
+    </section>
+    <nav class="tabs" aria-label="Vistas del proyecto">
+      @for (t of ['gantt', 'hitos', 'recursos', 'riesgos', 'criterios']; track t) {
+        <button [class.active]="tab === t" (click)="tab = t">
+          {{ t === 'gantt' ? 'Carta Gantt' : label(t) }}
+        </button>
+      }
+    </nav>
+    @if (tab === 'gantt') {
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Cronograma del proyecto</h2>
+            <p>Planificación base · No se calcula avance por la fecha actual</p>
+          </div>
+          <span class="tag">Oct 2026 — May 2027</span>
+        </div>
+        <div class="gantt-scroll">
+          <div class="gantt">
+            <div class="gantt-head">
+              <span>ACTIVIDAD / RESPONSABLE</span>
+              <div>
+                @for (m of ['OCT', 'NOV', 'DIC', 'ENE', 'FEB', 'MAR', 'ABR', 'MAY']; track m) {
+                  <span>{{ m }}</span>
+                }
+              </div>
+            </div>
+            @for (a of c.actividades; track a.id) {
+              <div class="gantt-row">
+                <div class="phase">
+                  <span class="phase-number">{{ a.id.replace('ACT-', '') }}</span>
+                  <div>
+                    <strong>{{ a.nombre }}</strong
+                    ><small
+                      >{{ a.responsable }} · {{ a.avance }}% · {{ date(a.inicio) }} —
+                      {{ date(a.fin) }}</small
+                    >
+                  </div>
+                </div>
+                <div class="timeline">
+                  <div
+                    class="bar"
+                    [style.left.%]="ganttLeft(a)"
+                    [style.width.%]="ganttWidth(a)"
+                    [title]="a.nombre + ' · ' + a.dependencias"
+                  >
+                    <i [style.width.%]="a.avance"></i>
+                  </div>
+                  @if (a.hito) {
+                    <span class="diamond" [style.left.%]="ganttLeft(a) + ganttWidth(a)">◆</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+        <div class="panel-foot">
+          Barras: período planificado · Relleno: avance registrado · ◆ Hito · Predecesoras incluidas
+          en la exportación
+        </div>
+      </article>
+    }
+    @if (tab === 'hitos') {
+      <div class="milestones">
+        @for (h of c.hitos; track h.id) {
+          <article class="panel milestone">
+            <span class="milestone-dot">⚑</span>
+            <div>
+              <small>{{ h.id }} · {{ h.responsable }}</small>
+              <h3>{{ h.nombre }}</h3>
+              <p>{{ date(h.fecha) }}</p>
+            </div>
+            <span class="tag">{{ h.estado }}</span>
+          </article>
+        }
+      </div>
+    }
+    @if (tab === 'recursos') {
+      <article class="panel table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Recurso</th>
+              <th>Disponibilidad</th>
+              <th>Asignación</th>
+              <th>Costo planificado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of c.recursos; track r.id) {
+              <tr>
+                <td>
+                  <strong>{{ r.nombre }}</strong
+                  ><small>{{ r.id }} · {{ r.categoria }}</small>
+                </td>
+                <td>{{ r.disponibilidad }}</td>
+                <td>{{ r.actividades }}</td>
+                <td>{{ money(r.costo) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </article>
+    }
+    @if (tab === 'riesgos') {
+      <div class="risk-grid">
+        @for (r of c.riesgos; track r.id) {
+          <article class="panel risk">
+            <div>
+              <span class="eyebrow">{{ r.id }} · {{ r.estado }}</span
+              ><span class="tag" [class.amber]="r.exposicion >= 12"
+                >Exposición {{ r.exposicion }}/25</span
+              >
+            </div>
+            <h3>{{ r.nombre }}</h3>
+            <p>{{ r.respuesta }}</p>
+            <small>{{ r.responsable }}</small>
+          </article>
+        }
+      </div>
+    }
+    @if (tab === 'criterios') {
+      <article class="panel criteria">
+        @for (r of c.criterios; track r.id) {
+          <div>
+            <span class="eyebrow">{{ r.id }} · {{ r.estado }}</span>
+            <h3>{{ r.nombre }}</h3>
+            <p>{{ r.meta }}</p>
+            <small>Evidencia: {{ r.evidencia }}</small>
+          </div>
+        }
+      </article>
+    }
+    <p class="source-note">Fuentes: {{ c.fuentes.join(' · ') }}</p>
+  }
+</div>
+<ng-template #orderTable
+  ><div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Orden / Vehículo</th>
+          <th>Cliente</th>
+          <th>Sucursal</th>
+          <th>Estado</th>
+          <th>Ingreso</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr>
+            <td>
+              <strong>{{ row['numero'] }}</strong
+              ><small
+                >{{ row['vehiculo']?.patente }} · {{ row['vehiculo']?.marca }}
+                {{ row['vehiculo']?.modelo }}</small
+              >
+            </td>
+            <td>{{ row['cliente']?.nombre }}</td>
+            <td>{{ row['sucursal']?.nombre }}</td>
+            <td>
+              <span
+                class="tag"
+                [class.green]="row['estado'] === 'ENTREGADA'"
+                [class.amber]="row['estado'] === 'PRESUPUESTO_PENDIENTE'"
+                >{{ label(row['estado']) }}</span
+              >
+            </td>
+            <td>{{ date(row['fechaIngreso']) }}</td>
+            <td><button class="link" (click)="inspect(row)">Ver orden →</button></td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="empty">No hay órdenes para esta selección.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div></ng-template
+>
+@if (modal()) {
+  <div class="overlay">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">REGISTRO AUTOFIX</span>
+          <h2 id="modal-title">
+            {{
+              modal() === 'cliente'
+                ? 'Nuevo cliente'
+                : modal() === 'vehiculo'
+                  ? 'Nuevo vehículo'
+                  : modal() === 'reserva'
+                    ? 'Nueva reserva'
+                    : modal() === 'stock'
+                      ? 'Ajuste de stock'
+                      : 'Recepción y nueva orden'
+            }}
+          </h2>
+        </div>
+        <button (click)="modal.set('')" aria-label="Cerrar">✕</button>
+      </div>
+      <form (ngSubmit)="modal() === 'stock' ? saveStock() : submit()" class="modal-body">
+        @if (error()) {
+          <p class="alert error" role="alert">{{ error() }}</p>
+        }
+        @if (modal() === 'cliente') {
+          <label
+            >Nombre completo<input
+              name="nombre"
+              [(ngModel)]="form['nombre']"
+              required
+              minlength="2"
+              maxlength="160" /></label
+          ><label
+            >RUT<input
+              name="rut"
+              [(ngModel)]="form['rut']"
+              placeholder="12.345.678-5"
+              required /></label
+          ><label
+            >Correo electrónico<input
+              name="email"
+              [(ngModel)]="form['email']"
+              type="email" /></label
+          ><label
+            >Teléfono internacional<input
+              name="telefono"
+              [(ngModel)]="form['telefono']"
+              placeholder="+56912345678" /></label
+          ><label class="check-label"
+            ><input name="acepta" type="checkbox" [(ngModel)]="form['aceptaNotificaciones']" />
+            Autoriza notificaciones</label
+          >
+        } @else if (modal() === 'stock') {
+          <p>{{ selected()?.['nombre'] }} · Indica la cantidad física resultante del conteo.</p>
+          <label
+            >Sucursal<select
+              aria-label="Sucursal"
+              name="sucursal"
+              [(ngModel)]="form['sucursalId']"
+              required
+            >
+              @for (s of sucursales(); track s.id) {
+                <option [value]="s.id">{{ s['nombre'] }}</option>
+              }
+            </select></label
+          ><label
+            >Cantidad física<input
+              name="cantidad"
+              type="number"
+              min="0"
+              [(ngModel)]="form['cantidad']"
+              required /></label
+          ><label
+            >Stock mínimo<input
+              name="minimo"
+              type="number"
+              min="0"
+              [(ngModel)]="form['stockMinimo']"
+              required /></label
+          ><label
+            >Motivo del ajuste<textarea
+              name="motivo"
+              [(ngModel)]="form['motivo']"
+              required
+              minlength="3"
+            ></textarea>
+          </label>
+        } @else {
+          <label
+            >Buscar cliente por nombre o RUT<input
+              #clientSearch
+              placeholder="Escribe y presiona buscar"
+              (keydown.enter)="$event.preventDefault(); findClients(clientSearch.value)" /></label
+          ><button type="button" (click)="findClients(clientSearch.value)">Buscar cliente</button
+          ><label
+            >Cliente<select
+              aria-label="Cliente"
+              name="cliente"
+              [(ngModel)]="form['clienteId']"
+              (ngModelChange)="ownerChanged()"
+              required
+            >
+              <option value="">Selecciona un cliente</option>
+              @for (c of clientes(); track c.id) {
+                <option [value]="c.id">{{ c['nombre'] }} · {{ c['rut'] }}</option>
+              }
+            </select></label
+          >
+          @if (modal() === 'vehiculo') {
+            <label
+              >Patente<input
+                name="patente"
+                [(ngModel)]="form['patente']"
+                required
+                placeholder="BCDF12"
+            /></label>
+            <div class="form-grid">
+              <label>Marca<input name="marca" [(ngModel)]="form['marca']" required /></label
+              ><label>Modelo<input name="modelo" [(ngModel)]="form['modelo']" required /></label
+              ><label
+                >Año<input
+                  name="anio"
+                  type="number"
+                  min="1950"
+                  max="2100"
+                  [(ngModel)]="form['anio']"
+                  required /></label
+              ><label
+                >Kilometraje<input
+                  name="km"
+                  type="number"
+                  min="0"
+                  [(ngModel)]="form['kilometraje']"
+                  required
+              /></label>
+            </div>
+          } @else {
+            <label
+              >Vehículo<select
+                aria-label="Vehículo"
+                name="vehiculo"
+                [(ngModel)]="form['vehiculoId']"
+                required
+              >
+                <option value="">Selecciona un vehículo del cliente</option>
+                @for (v of vehiculos(); track v.id) {
+                  <option [value]="v.id">
+                    {{ v['patente'] }} · {{ v['marca'] }} {{ v['modelo'] }}
+                  </option>
+                }
+              </select></label
+            ><label
+              >Sucursal<select
+                aria-label="Sucursal"
+                name="sucursal"
+                [(ngModel)]="form['sucursalId']"
+                (ngModelChange)="modal() === 'reserva' ? slots() : null"
+                [disabled]="!!api.usuario()?.sucursalId"
+                required
+              >
+                @for (s of sucursales(); track s.id) {
+                  @if (s['tipo'] === 'TALLER') {
+                    <option [value]="s.id">{{ s['nombre'] }}</option>
+                  }
+                }
+              </select></label
+            >
+            @if (modal() === 'reserva') {
+              <div class="form-grid">
+                <label
+                  >Fecha<input
+                    name="fecha"
+                    type="date"
+                    [(ngModel)]="form['fecha']"
+                    (change)="slots()"
+                    required /></label
+                ><label
+                  >Canal<select aria-label="Canal" name="canal" [(ngModel)]="form['canal']">
+                    @for (c of ['WEB', 'WHATSAPP', 'PRESENCIAL', 'TELEFONO']; track c) {
+                      <option [value]="c">{{ label(c) }}</option>
+                    }
+                  </select></label
+                >
+              </div>
+              @if (availability(); as a) {
+                <label
+                  >Horario disponible<select
+                    aria-label="Horario disponible"
+                    name="inicio"
+                    [(ngModel)]="form['inicio']"
+                    required
+                  >
+                    <option value="">Selecciona un horario</option>
+                    @for (slot of a; track slot.inicio) {
+                      <option [value]="slot.inicio" [disabled]="!slot.disponible">
+                        {{ date(slot.inicio) }} · {{ slot.boxes - slot.ocupados }} disponibles
+                      </option>
+                    }
+                  </select></label
+                >
+              }
+            } @else {
+              <label
+                >Kilometraje de ingreso<input
+                  name="km"
+                  type="number"
+                  min="0"
+                  [(ngModel)]="form['kilometraje']"
+                  required
+              /></label>
+            }
+            <label
+              >Motivo de ingreso<textarea
+                name="motivo"
+                [(ngModel)]="form['motivo']"
+                required
+                minlength="3"
+                [maxlength]="modal() === 'reserva' ? 300 : 500"
+              ></textarea>
+            </label>
+          }
+        }
+        <button class="primary wide" [disabled]="saving()">
+          {{ saving() ? 'Guardando…' : 'Guardar registro' }}
+        </button>
+      </form>
+    </section>
+  </div>
+}
+@if (detail(); as d) {
+  <div class="overlay">
+    <section class="drawer" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">ORDEN DE TRABAJO</span>
+          <h2 id="detail-title">{{ d['numero'] }}</h2>
+          <p>{{ d['vehiculo']?.patente }} · {{ d['cliente']?.nombre }}</p>
+        </div>
+        <button (click)="detail.set(null)" aria-label="Cerrar orden">✕</button>
+      </div>
+      <div class="drawer-body">
+        @if (error()) {
+          <p class="alert error" role="alert">{{ error() }}</p>
+        }
+        @if (notice()) {
+          <p class="alert success">{{ notice() }}</p>
+        }
+        <div class="detail-summary">
+          <span class="tag">{{ label(d['estado']) }}</span
+          ><span>{{ d['sucursal']?.nombre }}</span
+          ><span>{{ d['kilometraje'] | number }} km</span>
+        </div>
+        <p>{{ d['motivoIngreso'] }}</p>
+        @if (canWrite) {
+          <button (click)="linkPortal()" [disabled]="saving()">Generar enlace del cliente ↗</button>
+          @if (portalUrl) {
+            <p>
+              <a [href]="portalUrl" target="_blank" rel="noopener"
+                >Abrir portal de este cliente →</a
+              >
+            </p>
+          }
+        }
+        @if (openDetail && api.can('JEFE_TALLER', 'RECEPCION', 'MECANICO')) {
+          <section class="detail-section">
+            <h3>Continuar atención</h3>
+            <form (ngSubmit)="transition()">
+              <div class="form-grid">
+                <label
+                  >Siguiente estado<select
+                    aria-label="Siguiente estado"
+                    name="estado"
+                    [(ngModel)]="actionState"
+                    required
+                  >
+                    <option value="">Selecciona una transición</option>
+                    @for (s of transitions[d['estado']] || []; track s) {
+                      <option [value]="s">{{ label(s) }}</option>
+                    }
+                  </select></label
+                ><label
+                  >Comentario<input
+                    name="comentario"
+                    [(ngModel)]="comment"
+                    minlength="3"
+                    maxlength="500"
+                /></label>
+              </div>
+              <button class="primary" [disabled]="saving()">Actualizar estado</button>
+              <p class="muted small">
+                La entrega requiere presupuestos aprobados y consumo de repuestos validado.
+              </p>
+            </form>
+          </section>
+        }
+        <section class="detail-section">
+          <h3>Presupuestos y autorizaciones</h3>
+          @for (p of d['presupuestos']; track p.id) {
+            <article class="budget">
+              <div class="budget-title">
+                <strong>{{ p.numero || label(p.tipo) }}</strong
+                ><span class="tag">{{ label(p.estado) }}</span
+                ><strong>{{ money(p.total) }}</strong>
+              </div>
+              @for (i of p.items; track i.id) {
+                <p class="budget-line">
+                  <span>{{ i.cantidad }} × {{ i.descripcion }}</span
+                  ><span>{{ money(i.precioUnitario * i.cantidad) }}</span>
+                </p>
+              }
+              @if (openDetail && canWrite) {
+                <div class="actions">
+                  @if (p.estado === 'BORRADOR') {
+                    <button
+                      class="primary"
+                      (click)="budgetAction(p, 'enviar')"
+                      [disabled]="saving()"
+                    >
+                      Enviar al cliente
+                    </button>
+                  }
+                  @if (p.estado === 'ENVIADO') {
+                    <label
+                      >Nombre de quien autoriza<input
+                        [(ngModel)]="form['firmante']"
+                        minlength="3"
+                        maxlength="160" /></label
+                    ><button (click)="budgetAction(p, 'aprobar')" [disabled]="saving()">
+                      Registrar aprobación en mostrador</button
+                    ><label
+                      >Motivo de rechazo<input [(ngModel)]="form['rechazo']" minlength="3" /></label
+                    ><button (click)="budgetAction(p, 'rechazar')" [disabled]="saving()">
+                      Registrar rechazo
+                    </button>
+                  }
+                </div>
+              }
+            </article>
+          } @empty {
+            <p class="muted">Todavía no hay presupuestos.</p>
+          }
+          @if (openDetail && api.can('RECEPCION', 'JEFE_TALLER', 'MECANICO')) {
+            <button (click)="addBudgetItem()">＋ Agregar ítem de presupuesto</button>
+            @if (budgetItems.length) {
+              <form (ngSubmit)="createBudget()">
+                @for (item of budgetItems; track $index; let index = $index) {
+                  <div class="budget-item">
+                    <select
+                      [name]="'tipo' + index"
+                      [(ngModel)]="item['tipo']"
+                      (ngModelChange)="clearBudgetPart(item)"
+                    >
+                      <option value="MANO_OBRA">Mano de obra</option>
+                      <option value="REPUESTO">Repuesto</option>
+                    </select>
+                    @if (item['tipo'] === 'REPUESTO') {
+                      <select
+                        aria-label="Repuesto del presupuesto"
+                        [name]="'repuesto' + index"
+                        [(ngModel)]="item['repuestoId']"
+                        (ngModelChange)="budgetPart(item)"
+                        required
+                      >
+                        <option value="">Selecciona un repuesto</option>
+                        @for (p of parts(); track p.id) {
+                          <option [value]="p.id">{{ p['nombre'] }} · {{ p['codigo'] }}</option>
+                        }
+                      </select>
+                    }
+                    <input
+                      [name]="'desc' + index"
+                      [(ngModel)]="item['descripcion']"
+                      required
+                      minlength="3"
+                      maxlength="300"
+                      placeholder="Descripción"
+                    /><input
+                      [name]="'cantidad' + index"
+                      type="number"
+                      [(ngModel)]="item['cantidad']"
+                      min="1"
+                      max="1000"
+                      required
+                      aria-label="Cantidad"
+                    /><input
+                      [name]="'precio' + index"
+                      type="number"
+                      [(ngModel)]="item['precioUnitario']"
+                      min="0"
+                      required
+                      aria-label="Precio unitario CLP"
+                    /><input
+                      [name]="'garantia' + index"
+                      type="number"
+                      [(ngModel)]="item['garantiaMeses']"
+                      min="0"
+                      max="120"
+                      required
+                      aria-label="Garantía del trabajo en meses"
+                    /><button
+                      type="button"
+                      (click)="budgetItems.splice(index, 1)"
+                      aria-label="Quitar ítem"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                }
+                <label
+                  >Notas<textarea
+                    name="notas"
+                    [(ngModel)]="form['notas']"
+                    maxlength="2000"
+                  ></textarea></label
+                ><button class="primary" [disabled]="saving()">Guardar borrador</button>
+              </form>
+            }
+          }
+        </section>
+        <section class="detail-section">
+          <h3>Repuestos utilizados</h3>
+          @for (r of d['repuestos']; track r.id) {
+            <p>
+              {{ r.cantidad }} × {{ r.repuesto?.nombre }} · {{ r.sucursalOrigen?.nombre }}
+              @if (openDetail && api.can('MECANICO', 'JEFE_TALLER', 'BODEGA')) {
+                <button class="link" (click)="removePart(r.id)" [disabled]="saving()">
+                  Retirar y restituir stock
+                </button>
+              }
+            </p>
+          } @empty {
+            <p class="muted">Sin repuestos asignados.</p>
+          }
+          @if (openDetail && api.can('MECANICO', 'JEFE_TALLER', 'BODEGA')) {
+            <form (ngSubmit)="assignPart()" class="form-grid">
+              <label
+                >Repuesto<select
+                  aria-label="Repuesto"
+                  name="parte"
+                  [(ngModel)]="form['repuestoId']"
+                  required
+                >
+                  @for (p of parts(); track p.id) {
+                    <option [value]="p.id">{{ p['nombre'] }} · {{ p['codigo'] }}</option>
+                  }
+                </select></label
+              ><label
+                >Cantidad<input
+                  name="cantidad"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  [(ngModel)]="form['cantidad']"
+                  required /></label
+              ><label
+                >Garantía (meses)<input
+                  name="garantia"
+                  type="number"
+                  min="0"
+                  max="120"
+                  [(ngModel)]="form['garantiaMeses']" /></label
+              ><button [disabled]="saving()">Asignar repuesto</button>
+            </form>
+          }
+          @if (d['repuestosValidadosAt']) {
+            <p class="success-text">✓ Consumo validado · {{ date(d['repuestosValidadosAt']) }}</p>
+          } @else if (openDetail && api.can('JEFE_TALLER', 'BODEGA')) {
+            <button (click)="validateParts()" [disabled]="saving()">
+              {{
+                d['repuestos']?.length
+                  ? 'Validar consumo registrado'
+                  : 'Declarar trabajo sin repuestos'
+              }}
+            </button>
+          }
+        </section>
+        <section class="detail-section">
+          <h3>Evidencias del diagnóstico</h3>
+          @for (e of d['evidencias']; track e.id) {
+            <p>
+              <button class="link" (click)="downloadEvidence(e.id)">
+                {{ e.descripcion || e.nombreOriginal || 'Descargar evidencia' }} ↓
+              </button>
+            </p>
+          }
+          @if (openDetail && api.can('MECANICO', 'JEFE_TALLER', 'RECEPCION')) {
+            <label>Descripción<input [(ngModel)]="form['evidencia']" maxlength="500" /></label
+            ><label
+              >Adjuntar imagen JPG, PNG o WebP (máximo 5 MB)<input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                (change)="upload($event)"
+                [disabled]="saving()"
+            /></label>
+          }
+        </section>
+        <section class="detail-section">
+          <h3>Bitácora de la orden</h3>
+          @for (h of d['historial']; track h.id) {
+            <div class="timeline-event">
+              <i></i>
+              <div>
+                <strong>{{ label(h.estadoNuevo) }}</strong
+                ><small>{{ date(h.createdAt) }} · {{ h.usuario?.nombre || 'Sistema' }}</small>
+                <p>{{ h.comentario }}</p>
+              </div>
+            </div>
+          }
+        </section>
+        @if (d['estado'] === 'ENTREGADA') {
+          <div class="callout">
+            <strong>Total final autorizado: {{ money(d['totalFinal']) }}</strong>
+            <p>Entrega registrada el {{ date(d['fechaEntrega']) }}</p>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+}

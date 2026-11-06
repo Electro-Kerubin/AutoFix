@@ -1,0 +1,12 @@
+import { Injectable, inject, signal } from '@angular/core';
+import { Api } from './api';
+export type Row=Record<string,any>;
+@Injectable({providedIn:'root'})
+export class ProjectStore {
+ readonly api=inject(Api);readonly projects=signal<Row[]>([]);readonly project=signal<Row|null>(null);readonly error=signal('');readonly busy=signal(false);readonly notice=signal('');asOf='';private pending?:Promise<void>;
+ async ensure(){if(this.project())return;if(!this.pending)this.pending=this.refresh().finally(()=>this.pending=undefined);await this.pending;}
+ async refresh(id?:string){this.busy.set(true);this.error.set('');try{const projects=await this.api.get<Row[]>('/gestion/proyectos');this.projects.set(projects);const selected=id||this.project()?.['id']||localStorage.getItem('autofix-project');const current=projects.find(p=>p['id']===selected)||projects[0];if(current){const p=await this.api.get<Row>('/gestion/proyectos/'+current['id']+(this.asOf?'?fecha='+this.asOf:''));this.project.set(p);localStorage.setItem('autofix-project',p['id']);}else this.project.set(null);}catch(e){this.error.set((e as Error).message);}finally{this.busy.set(false);}}
+ async command(type:string,action:string,data:Row={},id?:string){this.busy.set(true);this.error.set('');try{const p=this.project()!;const result=await this.api.post<Row>('/gestion/proyectos/'+p['id']+'/comandos',{type,action,data,id,version:p['version']});this.project.set(result);this.notice.set('Guardado. Planificación, costos e indicadores actualizados.');this.projects.update(list=>list.map(row=>row['id']===result['id']?{...row,name:result['name'],code:result['code'],state:result['state']}:row));return true;}catch(e){this.error.set((e as Error).message);return false;}finally{this.busy.set(false);}}
+ async create(data:Row){this.busy.set(true);this.error.set('');try{const p=await this.api.post<Row>('/gestion/proyectos',data);this.project.set(p);await this.refresh(p['id']);return true;}catch(e){this.error.set((e as Error).message);return false;}finally{this.busy.set(false);}}
+ async remove(id:string){this.busy.set(true);this.error.set('');try{await this.api.request('DELETE','/gestion/proyectos/'+id);if(this.project()?.['id']===id)this.project.set(null);await this.refresh();}catch(e){this.error.set((e as Error).message);}finally{this.busy.set(false);}}
+}

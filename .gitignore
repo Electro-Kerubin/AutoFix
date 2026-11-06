@@ -12,3 +12,9 @@ Backend/uploads/*
 .idea/
 .DS_Store
 Thumbs.db
+
+.tools/
+*.log
+.integration/
+
+*.tsbuildinfo

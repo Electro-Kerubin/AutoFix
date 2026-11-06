@@ -1,4 +1,26 @@
 services:
+  backend:
+    build: ./Backend
+    restart: unless-stopped
+    env_file:
+      - path: ./Backend/.env
+        required: false
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-autofix}
+      DB_PASSWORD: ${DB_PASSWORD:-autofix_dev}
+      DB_NAME: ${DB_NAME:-autofix}
+      PORT: 3000
+      UPLOADS_DIR: /app/uploads
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./Backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: postgres:17-alpine
     container_name: autofix-db
