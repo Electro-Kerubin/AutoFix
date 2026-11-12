@@ -29,4 +29,8 @@ export class Notificacion extends EntidadBase {
   @Index()
   @Column({ type: 'uuid', nullable: true })
   reservaId: string | null;
+
+  /** Estado de la OT que originó el aviso: permite medir qué cambios de estado se notificaron (KPI 18). */
+  @Column({ type: 'varchar', length: 24, nullable: true })
+  estadoOt: string | null;
 }

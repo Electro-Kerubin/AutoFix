@@ -6,7 +6,7 @@ import { Api } from './api';
 describe('AutoFix sesión', () => {
   beforeEach(() => {
     sessionStorage.clear();
-    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter([])] });
+    TestBed.configureTestingModule({ imports: [App], providers: [provideRouter([{ path: '**', children: [] }])] });
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -15,10 +15,30 @@ describe('AutoFix sesión', () => {
   it('muestra acceso sin renderizar datos operativos para usuarios sin sesión', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('h2').textContent).toContain('Ingresa a tu proyecto');
+    expect(fixture.nativeElement.querySelector('h2').textContent).toContain('Ingresa a AutoFix');
     expect(fixture.nativeElement.querySelector('.sidebar')).toBeNull();
   });
-  it('oculta integraciones y KPI para recepción', async () => {
+  it('muestra a recepción sólo la operación de su rol', async () => {
+    const fixture = TestBed.createComponent(App);
+    const api = TestBed.inject(Api);
+    api.usuario.set({
+      id: 'recepcion',
+      nombre: 'Recepción',
+      email: 'recepcion@autofix.cl',
+      rol: 'RECEPCION',
+      sucursalId: 'santiago',
+    });
+    api.ready.set(true);
+    await fixture.whenStable();
+    const text = fixture.nativeElement.querySelector('nav').textContent;
+    expect(text).toContain('Agenda de taller');
+    expect(text).toContain('Órdenes de trabajo');
+    expect(text).toContain('Garantías e historial');
+    expect(text).not.toContain('Integraciones');
+    expect(text).not.toContain('Indicadores de operación');
+    expect(text).not.toContain('Administrador KPI');
+  });
+  it('oculta la operación y las integraciones al usuario de proyecto', async () => {
     const fixture = TestBed.createComponent(App);
     const api = TestBed.inject(Api);
     api.usuario.set({
@@ -26,12 +46,14 @@ describe('AutoFix sesión', () => {
       nombre: 'Recepción',
       email: 'recepcion@autofix.cl',
       rol: 'USUARIO_PROYECTO',
-      sucursalId: 'santiago',
+      sucursalId: null,
     });
     api.ready.set(true);
     await fixture.whenStable();
     const text = fixture.nativeElement.querySelector('nav').textContent;
-    expect(text).toContain('Actividades y dependencias'); expect(text).toContain('Tablero de cambios'); expect(text).not.toContain('Agenda de taller');
+    expect(text).toContain('Actividades y dependencias');
+    expect(text).toContain('Tablero de cambios');
+    expect(text).not.toContain('Agenda de taller');
     expect(text).not.toContain('Integraciones');
     expect(text).toContain('Administrador KPI');
   });

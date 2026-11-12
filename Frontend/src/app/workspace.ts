@@ -12,7 +12,7 @@ import { Api, Pagina, Registro } from './api';
 export class Workspace {
   readonly api = inject(Api);
   private route = inject(ActivatedRoute);
-  readonly view = this.route.snapshot.routeConfig?.path || '';
+  readonly view: string = this.route.snapshot.data['view'] ?? this.route.snapshot.routeConfig?.path ?? '';
   readonly titles: Record<string, string> = {
     '': 'Panel de operaciones',
     ordenes: 'Órdenes de trabajo',
@@ -54,6 +54,7 @@ export class Workspace {
   readonly detail = signal<Registro | null>(null);
   readonly availability = signal<any>(null);
   readonly history = signal<any>(null);
+  readonly eventos = signal<Registro[]>([]);
   readonly transitions: Record<string, string[]> = {
     RECEPCIONADA: ['EN_DIAGNOSTICO', 'CANCELADA'],
     EN_DIAGNOSTICO: ['PRESUPUESTO_PENDIENTE', 'CANCELADA'],
@@ -111,6 +112,31 @@ export class Workspace {
           },
         )
       : '—';
+  }
+  hoy() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+  }
+  medibles(lista: Registro[]) {
+    return lista.filter((i) => i['cumple'] !== null).length;
+  }
+  cumplidos(lista: Registro[]) {
+    return lista.filter((i) => i['cumple'] === true).length;
+  }
+  resumenEvento(e: Registro) {
+    switch (e['tipo']) {
+      case 'RECLAMO':
+        return e['detalle'];
+      case 'LLAMADA_ESTADO':
+        return e['cantidad'] + ' llamada(s)';
+      case 'ATENCION_FUERA_SUGO':
+        return e['cantidad'] + ' atención(es) fuera de SUGO';
+      case 'COMPRA_REPUESTO':
+        return this.money(e['monto']) + (e['urgente'] ? ' · urgente' : ' · programada');
+      case 'CIERRE_TALLER':
+        return e['horas'] + ' h · ' + this.label(e['motivo']);
+      default:
+        return '';
+    }
   }
   fail(e: unknown) {
     this.error.set(e instanceof Error ? e.message : 'No se pudo completar la operación.');
@@ -199,10 +225,18 @@ export class Workspace {
               )
             : Promise.resolve(null),
         ]);
+        const eventos =
+          this.view === 'indicadores' && this.api.can('GERENCIA', 'JEFE_TALLER')
+            ? await this.api.get<Registro[]>(
+                '/indicadores/eventos' +
+                  this.params({ ...this.scoped, desde: this.desde, hasta: this.hasta }),
+              )
+            : [];
         if (generation !== this.generation) return;
         this.rows.set(orders.items);
         this.total.set(orders.total);
         this.kpi.set(kpi);
+        this.eventos.set(eventos);
       }
       if (generation !== this.generation) return;
       if (result) {
@@ -249,6 +283,11 @@ export class Workspace {
       anio: new Date().getFullYear(),
       sucursalId: this.sucursal || this.sucursales().find((s) => s['tipo'] === 'TALLER')?.id,
       aceptaNotificaciones: true,
+      tipo: 'LLAMADA_ESTADO',
+      fecha: this.hoy(),
+      cantidad: 1,
+      motivoCierre: 'MIGRACION',
+      urgente: false,
     };
     this.availability.set(null);
     this.modal.set(kind);
@@ -345,6 +384,25 @@ export class Workspace {
           motivo: this.form['motivo'],
           inicio: this.form['inicio'],
           canal: this.form['canal'],
+        };
+      }
+      if (kind === 'evento') {
+        path = '/indicadores/eventos';
+        const tipo = this.form['tipo'];
+        payload = {
+          tipo,
+          sucursalId: this.form['sucursalId'],
+          fecha: this.form['fecha'],
+          ...(['LLAMADA_ESTADO', 'ATENCION_FUERA_SUGO'].includes(tipo)
+            ? { cantidad: Number(this.form['cantidad']) }
+            : {}),
+          ...(tipo === 'COMPRA_REPUESTO'
+            ? { monto: Number(this.form['monto']), urgente: !!this.form['urgente'] }
+            : {}),
+          ...(tipo === 'CIERRE_TALLER'
+            ? { horas: Number(this.form['horas']), motivo: this.form['motivoCierre'] }
+            : {}),
+          ...(tipo === 'RECLAMO' ? { detalle: this.form['detalle'] } : {}),
         };
       }
       await this.api.post(path, payload);

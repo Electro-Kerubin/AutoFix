@@ -98,3 +98,17 @@ export enum EstadoSync {
   ERROR = 'ERROR',
   FALLIDO = 'FALLIDO',
 }
+
+/** Hechos operativos que el sistema no genera solo y que alimentan los KPI del Charter (6, 7, 9, 12, 15, 22-24). */
+export enum TipoEventoKpi {
+  /** KPI 7: reclamo por diferencia entre presupuesto y cobro final. */
+  RECLAMO = 'RECLAMO',
+  /** KPI 12: llamadas del día preguntando por el estado de un vehículo (cantidad). */
+  LLAMADA_ESTADO = 'LLAMADA_ESTADO',
+  /** KPI 9: compra de repuestos, normal o urgente (monto). */
+  COMPRA_REPUESTO = 'COMPRA_REPUESTO',
+  /** KPI 15: horas de taller cerradas por migración o capacitación. */
+  CIERRE_TALLER = 'CIERRE_TALLER',
+  /** KPI 6 y 22-24: atenciones registradas en papel o Excel en vez de SUGO (cantidad). */
+  ATENCION_FUERA_SUGO = 'ATENCION_FUERA_SUGO',
+}

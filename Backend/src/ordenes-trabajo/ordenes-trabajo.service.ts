@@ -173,7 +173,7 @@ export class OrdenesTrabajoService {
         numero: orden.numero,
         link: await this.linkPortal(id),
       }),
-      { otId: id },
+      { otId: id, estadoOt: EstadoOt.RECEPCIONADA },
     );
     // Aviso para la recepción: garantías vigentes del vehículo antes de cobrar (REQ-06).
     const garantiasVigentes = await this.garantias.vigentesPorVehiculo(vehiculo.id);
@@ -221,12 +221,26 @@ export class OrdenesTrabajoService {
     });
 
     const orden = await this.obtener(id);
+    // REQ-05: todo cambio de estado se informa al cliente para que no tenga que llamar al taller.
     if (nuevo === EstadoOt.LISTA_ENTREGA) {
       await this.notificaciones.notificarCliente(
         orden.cliente,
         'VEHICULO_LISTO',
         PLANTILLAS.VEHICULO_LISTO({ nombre: orden.cliente.nombre, patente: orden.vehiculo.patente, sucursal: orden.sucursal.nombre }),
-        { otId: id },
+        { otId: id, estadoOt: nuevo },
+      );
+    } else {
+      await this.notificaciones.notificarCliente(
+        orden.cliente,
+        'ESTADO_OT',
+        PLANTILLAS.ESTADO_OT({
+          nombre: orden.cliente.nombre,
+          patente: orden.vehiculo.patente,
+          numero: orden.numero,
+          estado: nuevo,
+          link: await this.linkPortal(id),
+        }),
+        { otId: id, estadoOt: nuevo },
       );
     }
     return orden;

@@ -98,8 +98,10 @@ export class SeedService implements OnApplicationBootstrap {
     for (const s of SUCURSALES) porCodigo.set(s.codigo, await this.sucursales.save(this.sucursales.create(s)));
 
     const passwordHash = await this.usuariosService.hash(PASSWORD_DEMO);
+    // El módulo de gestión puede haber creado ya la cuenta admin: no duplicar correos existentes.
+    const existentes = new Set((await this.usuarios.find({ select: { email: true } })).map((u) => u.email));
     await this.usuarios.save(
-      USUARIOS.map((u) =>
+      USUARIOS.filter((u) => !existentes.has(u.email)).map((u) =>
         this.usuarios.create({
           nombre: u.nombre,
           email: u.email,

@@ -160,6 +160,7 @@ export class PresupuestosService {
 
   private async decidir(id: string, aprobado: boolean, origen: OrigenDecision, motivo?: string): Promise<Presupuesto> {
     const { otId } = await this.obtener(id);
+    let nuevoEstado: EstadoOt | null = null;
     await this.dataSource.transaction(async (manager) => {
       const ot = await bloquearOt(manager, otId);
       exigirAbierta(ot);
@@ -191,6 +192,7 @@ export class PresupuestosService {
       if (ot.estado === EstadoOt.PRESUPUESTO_PENDIENTE) {
         if (aprobado) {
           await aplicarEstado(manager, ot, EstadoOt.EN_REPARACION, origen.usuarioId ?? null, `Presupuesto #${presupuesto.numero} aprobado (${origen.canal})`);
+          nuevoEstado = EstadoOt.EN_REPARACION;
         } else {
           const hayAprobado = await manager.existsBy(Presupuesto, { otId, estado: EstadoPresupuesto.APROBADO });
           await aplicarEstado(
@@ -200,9 +202,11 @@ export class PresupuestosService {
             origen.usuarioId ?? null,
             `Presupuesto #${presupuesto.numero} rechazado: ${motivo ?? 'sin motivo'}`,
           );
+          nuevoEstado = hayAprobado ? EstadoOt.EN_REPARACION : EstadoOt.EN_DIAGNOSTICO;
         }
       }
     });
+    if (nuevoEstado) await this.avisarEstado(otId, nuevoEstado);
     return this.obtener(id);
   }
 
@@ -263,7 +267,31 @@ export class PresupuestosService {
         total: presupuesto.total,
         link: `${this.config.publicUrl}/portal/${ot.tokenPortal}`,
       }),
-      { otId: ot.id },
+      { otId: ot.id, estadoOt: EstadoOt.PRESUPUESTO_PENDIENTE },
+    );
+  }
+
+  /** Informa al cliente el nuevo estado de su OT cuando cambia por su propia decisión sobre un presupuesto. */
+  private async avisarEstado(otId: string, estado: EstadoOt): Promise<void> {
+    const ot = await this.ots
+      .createQueryBuilder('ot')
+      .addSelect('ot.tokenPortal')
+      .leftJoinAndSelect('ot.cliente', 'cliente')
+      .leftJoinAndSelect('ot.vehiculo', 'vehiculo')
+      .where('ot.id = :id', { id: otId })
+      .getOne();
+    if (!ot) return;
+    await this.notificaciones.notificarCliente(
+      ot.cliente,
+      'ESTADO_OT',
+      PLANTILLAS.ESTADO_OT({
+        nombre: ot.cliente.nombre,
+        patente: ot.vehiculo.patente,
+        numero: ot.numero,
+        estado,
+        link: `${this.config.publicUrl}/portal/${ot.tokenPortal}`,
+      }),
+      { otId, estadoOt: estado },
     );
   }
 }

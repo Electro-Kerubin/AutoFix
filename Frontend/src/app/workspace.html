@@ -171,35 +171,103 @@
         <article class="panel">
           <div class="panel-heading">
             <div>
-              <h2>Metas del piloto</h2>
-              <p>Resultados medidos y criterios definidos en el Charter</p>
-            </div>
-            <a routerLink="/proyecto">Ver contexto →</a>
-          </div>
-          <div class="criteria">
-            <div>
-              <strong>Ausentismo menor al 4%</strong>
+              <h2>KPI del Charter</h2>
               <p>
-                Resultado actual:
-                {{
-                  k.reservas.tasaNoShow === null
-                    ? 'sin datos de asistencia'
-                    : k.reservas.tasaNoShow + '%'
-                }}
+                {{ cumplidos(k.kpiSugo) }} de {{ medibles(k.kpiSugo) }} KPI con datos cumplen su meta ·
+                {{ k.kpiSugo.length }} KPI definidos
               </p>
             </div>
             <div>
-              <strong>Compras urgentes menores al 5%</strong>
-              <p>Pendiente de medición: la API aún no registra compras urgentes.</p>
+              @if (api.can('JEFE_TALLER')) {
+                <button class="primary" (click)="open('evento')">＋ Registrar hecho</button>
+              }
+              @if (api.can('USUARIO_PROYECTO')) {
+                <a routerLink="/kpi">KPI del proyecto →</a>
+              }
             </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>N.º</th>
+                  <th>Indicador</th>
+                  <th>Hito</th>
+                  <th>Resultado</th>
+                  <th>Meta</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (i of k.kpiSugo; track i.n) {
+                  <tr>
+                    <td>{{ i.n }}</td>
+                    <td>
+                      <strong>{{ i.nombre }}</strong
+                      ><small>{{ i.ambito }} · {{ i.detalle }}</small>
+                    </td>
+                    <td>{{ i.hito }}</td>
+                    <td>
+                      {{ i.valor === null ? '—' : (i.valor | number: '1.0-2') + ' ' + i.unidad }}
+                    </td>
+                    <td>{{ i.meta }}</td>
+                    <td>
+                      <span
+                        class="tag"
+                        [class.green]="i.cumple === true"
+                        [class.amber]="i.cumple === false"
+                        >{{
+                          i.fuente === 'PROYECTO'
+                            ? 'En Proyecto SUGO'
+                            : i.cumple === null
+                              ? 'Sin datos'
+                              : i.cumple
+                                ? 'Cumple'
+                                : 'No cumple'
+                        }}</span
+                      >
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading">
             <div>
-              <strong>Cero reclamos por diferencias de cobro</strong>
-              <p>Pendiente de medición: requiere registro de reclamos.</p>
+              <h2>Hechos registrados</h2>
+              <p>
+                Reclamos, llamadas, compras, cierres de taller y atenciones fuera de SUGO que
+                alimentan los KPI 6, 7, 9, 12, 15, 16 y 22–24
+              </p>
             </div>
-            <div>
-              <strong>Reducir las llamadas más de 70%</strong>
-              <p>Pendiente de medición: requiere registro telefónico.</p>
-            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Sucursal</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of eventos(); track e.id) {
+                  <tr>
+                    <td>{{ date(e['fecha']) }}</td>
+                    <td>{{ label(e['tipo']) }}</td>
+                    <td>{{ e['sucursal']?.nombre }}</td>
+                    <td>{{ resumenEvento(e) }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="empty">Aún no hay hechos registrados en el período.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
         </article>
       }
@@ -772,7 +840,9 @@
                     ? 'Nueva reserva'
                     : modal() === 'stock'
                       ? 'Ajuste de stock'
-                      : 'Recepción y nueva orden'
+                      : modal() === 'evento'
+                        ? 'Registrar hecho para los KPI'
+                        : 'Recepción y nueva orden'
             }}
           </h2>
         </div>
@@ -845,6 +915,84 @@
               minlength="3"
             ></textarea>
           </label>
+        } @else if (modal() === 'evento') {
+          <label
+            >Tipo de hecho<select aria-label="Tipo" name="tipo" [(ngModel)]="form['tipo']" required>
+              <option value="RECLAMO">Reclamo por diferencia de cobro</option>
+              <option value="LLAMADA_ESTADO">Llamadas por estado del vehículo</option>
+              <option value="COMPRA_REPUESTO">Compra de repuestos</option>
+              <option value="CIERRE_TALLER">Horas de taller cerradas</option>
+              <option value="ATENCION_FUERA_SUGO">Atenciones en papel o Excel</option>
+            </select></label
+          ><label
+            >Sucursal<select
+              aria-label="Sucursal"
+              name="sucursal"
+              [(ngModel)]="form['sucursalId']"
+              [disabled]="!!api.usuario()?.sucursalId"
+              required
+            >
+              @for (s of sucursales(); track s.id) {
+                @if (s['tipo'] === 'TALLER') {
+                  <option [value]="s.id">{{ s['nombre'] }}</option>
+                }
+              }
+            </select></label
+          ><label
+            >Fecha<input name="fecha" type="date" [(ngModel)]="form['fecha']" [max]="hoy()" required
+          /></label>
+          @if (form['tipo'] === 'LLAMADA_ESTADO' || form['tipo'] === 'ATENCION_FUERA_SUGO') {
+            <label
+              >Cantidad<input
+                name="cantidad"
+                type="number"
+                min="1"
+                max="10000"
+                [(ngModel)]="form['cantidad']"
+                required
+            /></label>
+          }
+          @if (form['tipo'] === 'COMPRA_REPUESTO') {
+            <label
+              >Monto (CLP)<input
+                name="monto"
+                type="number"
+                min="0"
+                [(ngModel)]="form['monto']"
+                required /></label
+            ><label class="check-label"
+              ><input name="urgente" type="checkbox" [(ngModel)]="form['urgente']" /> Compra
+              urgente</label
+            >
+          }
+          @if (form['tipo'] === 'CIERRE_TALLER') {
+            <label
+              >Horas cerradas<input
+                name="horas"
+                type="number"
+                min="0.25"
+                step="0.25"
+                [(ngModel)]="form['horas']"
+                required /></label
+            ><label
+              >Motivo<select aria-label="Motivo" name="motivoCierre" [(ngModel)]="form['motivoCierre']" required>
+                <option value="MIGRACION">Migración</option>
+                <option value="CAPACITACION">Capacitación</option>
+                <option value="OTRO">Otro</option>
+              </select></label
+            >
+          }
+          @if (form['tipo'] === 'RECLAMO') {
+            <label
+              >Descripción del reclamo<textarea
+                name="detalleEvento"
+                [(ngModel)]="form['detalle']"
+                required
+                minlength="3"
+                maxlength="500"
+              ></textarea>
+            </label>
+          }
         } @else {
           <label
             >Buscar cliente por nombre o RUT<input

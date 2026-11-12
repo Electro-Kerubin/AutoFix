@@ -29,7 +29,7 @@ export class NotificacionesService {
     cliente: DestinatarioCliente,
     plantilla: string,
     mensaje: string,
-    contexto: { otId?: string; reservaId?: string } = {},
+    contexto: { otId?: string; reservaId?: string; estadoOt?: string } = {},
   ): Promise<void> {
     if (!cliente.aceptaNotificaciones) return;
 
@@ -47,6 +47,7 @@ export class NotificacionesService {
       mensaje,
       otId: contexto.otId ?? null,
       reservaId: contexto.reservaId ?? null,
+      estadoOt: contexto.estadoOt ?? null,
       estado: EstadoNotificacion.ENVIADA,
       error: null,
     });

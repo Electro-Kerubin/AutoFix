@@ -1,6 +1,109 @@
-@if(!api.ready()){<div class="splash">Abriendo el gestor de proyectos…</div>}
-@else if(!api.usuario()){
-<main class="login-layout"><section class="login-story"><a class="brand" href="/"><span class="brand-mark">A</span><span>AutoFix<small>GESTOR DE PROYECTOS</small></span></a><div><span class="eyebrow">PLANIFICACIÓN · SEGUIMIENTO · CAMBIO</span><h1>Un proyecto claro.<br>Decisiones a tiempo.</h1><p>Coordina actividades, recursos y compromisos. Controla el presupuesto y evalúa cada cambio antes de implementarlo.</p><div class="story-flow">Planificar <span>→</span> Ejecutar <span>→</span> Monitorear <span>→</span> Controlar</div></div><footer>Proyecto Integrador · Gestión de Proyectos de Software</footer></section><section class="login-form"><form (ngSubmit)="login()"><span class="eyebrow">ESPACIO DE DIRECCIÓN DEL PROYECTO</span><h2>Ingresa a tu proyecto</h2><p>Planificación, seguimiento y gestión del cambio en un solo lugar.</p><label>Correo electrónico<input name="email" type="email" autocomplete="username" [(ngModel)]="email" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" [(ngModel)]="password" required></label>@if(error()){<p class="alert error" role="alert">{{error()}}</p>}<button class="primary wide" [disabled]="busy()">{{busy()?'Ingresando…':'Ingresar al gestor →'}}</button><p class="muted small">Administrador y usuario de proyecto.</p></form></section></main>
-}@else{
-<div class="app-shell"><aside class="sidebar" [class.open]="menu()"><a class="brand" routerLink="/"><span class="brand-mark">A</span><span>AutoFix<small>GESTOR DE PROYECTOS</small></span></a><div class="nav-label">DIRECCIÓN Y CONTROL</div><nav>@for(item of nav;track item.path){<a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="menu.set(false)"><span class="nav-icon">{{item.icon}}</span>{{item.label}}</a>}</nav><div class="sidebar-bottom"><div class="pilot"><i></i> Proyecto SUGO<small>Planificación y gestión del cambio</small></div><button (click)="api.logout()">Cerrar sesión ↗</button></div></aside><div class="main"><header class="topbar"><button class="mobile-menu" (click)="menu.set(!menu())" aria-label="Abrir navegación">☰</button><div><span class="muted">AutoFix</span><span class="breadcrumb">/</span>Gestión de proyectos de software</div><div class="user"><span class="avatar">{{api.usuario()?.nombre?.slice(0,2)?.toUpperCase()}}</span><div><strong>{{api.usuario()?.nombre}}</strong><small>{{api.usuario()?.rol==='ADMIN'?'Administrador':'Usuario de proyecto'}}</small></div></div></header><router-outlet /></div></div>
+@if (isPortal) {
+  <router-outlet />
+} @else if (!api.ready()) {
+  <div class="splash">Abriendo AutoFix…</div>
+} @else if (!api.usuario()) {
+  <main class="login-layout">
+    <section class="login-story">
+      <a class="brand" href="/"
+        ><span class="brand-mark">A</span><span>AutoFix<small>SUGO</small></span></a
+      >
+      <div>
+        <span class="eyebrow">AGENDA · ORDEN DE TRABAJO · PRESUPUESTO · REPUESTOS · GARANTÍA</span>
+        <h1>Una red de talleres.<br />Una sola operación.</h1>
+        <p>
+          Coordina reservas, recepciones, presupuestos aprobados por el cliente y repuestos
+          trazables en las sucursales piloto, con el proyecto SUGO bajo control.
+        </p>
+        <div class="story-flow">Agendar <span>→</span> Recibir <span>→</span> Reparar <span>→</span> Entregar</div>
+      </div>
+      <footer>Proyecto Integrador · Gestión de Proyectos de Software</footer>
+    </section>
+    <section class="login-form">
+      <form (ngSubmit)="login()">
+        <span class="eyebrow">ACCESO AL SISTEMA</span>
+        <h2>Ingresa a AutoFix</h2>
+        <p>Operación de talleres y gestión del proyecto en un solo lugar.</p>
+        <label
+          >Correo electrónico<input
+            name="email"
+            type="email"
+            autocomplete="username"
+            [(ngModel)]="email"
+            required
+        /></label>
+        <label
+          >Contraseña<input
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            [(ngModel)]="password"
+            required
+        /></label>
+        @if (error()) {
+          <p class="alert error" role="alert">{{ error() }}</p>
+        }
+        <button class="primary wide" [disabled]="busy()">
+          {{ busy() ? 'Ingresando…' : 'Ingresar →' }}
+        </button>
+        <p class="muted small">
+          Cada cuenta ve únicamente las funciones de su rol y de su sucursal.
+        </p>
+      </form>
+    </section>
+  </main>
+} @else {
+  <div class="app-shell">
+    <aside class="sidebar" [class.open]="menu()">
+      <a class="brand" [routerLink]="esOperacion ? '/panel' : '/'"
+        ><span class="brand-mark">A</span><span>AutoFix<small>SUGO</small></span></a
+      >
+      <nav>
+        @if (operacion.length) {
+          <div class="nav-label">OPERACIÓN DE TALLERES</div>
+          @for (item of operacion; track item.path) {
+            <a
+              [routerLink]="item.path"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              (click)="menu.set(false)"
+              ><span class="nav-icon">{{ item.icon }}</span
+              >{{ item.label }}</a
+            >
+          }
+        }
+        @if (proyecto.length) {
+          <div class="nav-label">DIRECCIÓN Y CONTROL DEL PROYECTO</div>
+          @for (item of proyecto; track item.path) {
+            <a
+              [routerLink]="item.path"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              (click)="menu.set(false)"
+              ><span class="nav-icon">{{ item.icon }}</span
+              >{{ item.label }}</a
+            >
+          }
+        }
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="pilot"><i></i> Proyecto SUGO<small>Santiago · Rancagua · Viña del Mar</small></div>
+        <button (click)="api.logout()">Cerrar sesión ↗</button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <button class="mobile-menu" (click)="menu.set(!menu())" aria-label="Abrir navegación">☰</button>
+        <div><span class="muted">AutoFix</span><span class="breadcrumb">/</span>SUGO</div>
+        <div class="user">
+          <span class="avatar">{{ api.usuario()?.nombre?.slice(0, 2)?.toUpperCase() }}</span>
+          <div>
+            <strong>{{ api.usuario()?.nombre }}</strong
+            ><small>{{ rolEtiqueta }}</small>
+          </div>
+        </div>
+      </header>
+      <router-outlet />
+    </div>
+  </div>
 }
